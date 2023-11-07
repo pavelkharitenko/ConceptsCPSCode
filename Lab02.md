@@ -1,6 +1,6 @@
 ## lab02.c so far:
 
-```
+```c
 #include "lab02.h"
 
 #include <xc.h>
