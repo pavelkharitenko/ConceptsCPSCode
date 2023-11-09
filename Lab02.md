@@ -39,7 +39,6 @@ void initialize_timer()
     T2CONbits.TON = 0;
     T3CONbits.TON = 0;
     
-    
     // Set Prescaler
     T1CONbits.TCKPS = 0b11;     // (00 wwould have been 1:1 prescaler, timer follows exactly the oscillator)
     T2CONbits.TCKPS = 0b11;     // 11 is 1:256 ratio according to dsPIC datasheet, timer follows 
@@ -59,9 +58,9 @@ void initialize_timer()
     T1CONbits.TSYNC = 0;
 
     // Load Timer Periods
-    PR1 = 32767/256;        // timer 1 counts with speed of 32kHz, according to dsPIC datasheet, sum 32767 will appear once a second.
+    PR1 = FCY_EXT/256;        // timer 1 counts with speed of 32kHz, according to dsPIC datasheet, sum 32767 will appear once a second.
     PR2 = 100;        // timer 2 counts with speed of 12.8Mhz * 1/256 = 50000Hz. 50k is 1 sec, 50 is 1 ms, and 100 is 2 ms. 
-    PR3 = 65535;
+    PR3 = 0xffff;
     
     // Reset Timer Values
     TMR1 = 0;
@@ -80,6 +79,7 @@ void initialize_timer()
     IEC0bits.T1IE = 1;
     IEC0bits.T2IE = 1;
     
+    
     // Enable the Timers
     T1CONbits.TON = 1; 
     T2CONbits.TON = 1; 
@@ -96,10 +96,19 @@ void timer_loop()
     
     
     uint16_t i = 0;
+    TMR3 = 0;
     while(TRUE)
     {
         i++;
+        
         if(i==2000){
+            lcd_locate(0, 7);
+            float TMR3_ms = ((float)TMR3/FCY)*1000;
+            lcd_printf("c=%u, d=%.4fms",TMR3, TMR3_ms);
+            //uint16_t i1 = (uint16_t) TMR3_ms;
+            //uint16_t i2 = (uint16_t)((TMR3_ms - i1)*10000);
+            //lcd_printf("c=%u, d=%u.%ums",TMR3, i1, i2);
+            TMR3 = 0;
             i = 0;
             lcd_locate(0, 2);
             
@@ -109,8 +118,6 @@ void timer_loop()
             //global_counter_tmr2 = 0;
             TOGGLELED(LED3_PORT);
             
-            lcd_locate(0, 3);
-            lcd_printf("Timer3 content = %u",TMR3);
             
             
         }
@@ -129,7 +136,7 @@ void __attribute__((__interrupt__, __shadow__, __auto_psv__)) _T1Interrupt(void)
         global_counter_tmr1 = 0;
         minutes++;
     }
-    TOGGLELED(LED1_PORT);
+    TOGGLELED(LED2_PORT);
     
 }
 
@@ -142,7 +149,7 @@ void __attribute__((__interrupt__, __shadow__, __auto_psv__)) _T2Interrupt(void)
         global_counter_tmr2 = 0;
     }
     
-    TOGGLELED(LED2_PORT);
+    TOGGLELED(LED1_PORT);
     
     
 }
