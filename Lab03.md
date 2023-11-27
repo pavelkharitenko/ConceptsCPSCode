@@ -1,3 +1,5 @@
+lab03.c:
+```c
 #include "lab03.h"
 
 #include <xc.h>
@@ -107,3 +109,5 @@ void main_loop()
         // main loop code
     }
 }
+
+```
