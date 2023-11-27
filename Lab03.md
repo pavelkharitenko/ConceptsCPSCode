@@ -1,4 +1,3 @@
-
 #include "lab03.h"
 
 #include <xc.h>
@@ -39,20 +38,30 @@ void dac_initialize()
     // see datasheet 11.3
     
     // set AN0-15 to digital/analog by configuring the AD1PCFGL register, set AN16-31 to digital/analog by configuring the AD1PCFGH register
-    
     // AN10
-    TRISBbits.TRISB10 = 1; // set the same digital pin in general as input
     AD1PCFGLbits.PCFG10 = 1; // if this bit is set, it is conf. as a digital input (dsPIC datasheet 11.3)
     
     // AN11
-    TRISBbits.TRISB11 = 1; // set the same digital pin in general as input
-    AD1PCFGLbits.PCFG10 = 1; // if this bit is set, it is conf. as a digital input (dsPIC datasheet 11.3)
-     
+    AD1PCFGLbits.PCFG11 = 1; // if this bit is set, it is conf. as a digital input (dsPIC datasheet 11.3)
+    
+    // AN13
+    AD1PCFGLbits.PCFG13 = 1; // if this bit is set, it is conf. as a digital input (dsPIC datasheet 11.3)
+    
     
     // set RD8, RB10, RB11, RB13 as output pins
     
+    TRISBbits.TRISB10 = 0; // set the now digital pin in general as output
+    TRISBbits.TRISB11 = 0; // similar
+    TRISBbits.TRISB13 = 0; // similar
+    
+    
     // set default state: CS=??, SCK=??, SDI=??, LDAC=??
     
+    DAC_CS_PORT = 0; // needs to be set to low during write operations
+    DAC_SCK_PORT = 0;  // needs to be set to low, then after writing one bit, again to high, so probably needs to be set to low initially 
+    DAC_LDAC_PORT = 1; // set to low->high later after all bits sent, to output the voltage, so probably needs to be set to high initially 
+    
+    // note: 
 }
 
 /*
