@@ -209,3 +209,4 @@ void __attribute__((__interrupt__, __shadow__, __auto_psv__)) _T2Interrupt(void)
     IFS0bits.T2IF = 0; // Clear the interrupt flag
     global_counter_tmr2++; // Increment a global counter
 }
+
