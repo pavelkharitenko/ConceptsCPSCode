@@ -52,21 +52,23 @@ void initialize_timer(){
     SETBIT(T2CONbits.TON);
 }
 
-void initialize_servos(uint8_t servo_number){
-    if (servo_number == 0){ // x-servo --> OC8
-        // Setup OC8
-        CLEARBIT(TRISDbits.TRISD7);
-        OC8R = 3700; // set initial duty cycle to 20-1.5ms
-        OC8RS = 3700; // load OCRS: next PWM duty cycle
-        OC8CON = 0x0006; // set OC8: PWM, no fault check, Timer 2
-    }
-    else if (servo_number == 1){ // y-servo --> OC7
-        // Setup OC7
-        CLEARBIT(TRISDbits.TRISD6);
-        OC7R = 3700;
-        OC7RS = 3700;
-        OC7CON = 0x0006;
-    }
+void initialize_servos(){
+    // OC8 is at D7, OC7 at D6, set them as output
+    CLEARBIT(TRISDbits.TRISD7);
+    CLEARBIT(TRISDbits.TRISD6);
+
+    // x-servo, setup Output Compare pin 8: OC8
+
+    // set output compare register to n timer ticks the pin should be set to high (here we need 18.5ms)
+    OC8R = 3700; // set initial duty cycle to 20-1.5ms
+    OC8RS = 3700; // load OCRS: next PWM duty cycle
+    OC8CON = 0x0006; // set OC8: PWM, no fault check, Timer 2
+    
+    // y-servo setup Output Compare pin 7:
+    OC7R = 3700;
+    OC7RS = 3700;
+    OC7CON = 0x0006;
+    
 }
 
 void set_duty_cycle(uint8_t servo_number, double duty_cycle){
@@ -156,19 +158,10 @@ void main_loop()
     // initialize touchscreen
     initialize_touchscreen();
     // initialize servos
-    initialize_servos(0);
-    initialize_servos(1);
+    initialize_servos();
     initialize_timer();
     
-    
-    
-    
-    /*while(TRUE){
-        set_duty_cycle(0, 20-2.1);
-        set_duty_cycle(1, 20-2.1);*/
-    
-    while(TRUE) {
-        
+    while(TRUE) { 
         // print assignment information
         lcd_locate(0, 0);
 
@@ -181,8 +174,7 @@ void main_loop()
         lcd_printf("x: %u", read_ball_position_x());
         lcd_locate(0, 6);
         change_dimension(1);
-        lcd_printf("y: %u", read_ball_position_y());
-        
+        lcd_printf("y: %u", read_ball_position_y());    
         
         if(global_counter_tmr2 >= 1000 ){
             global_counter_tmr2  = 0;
