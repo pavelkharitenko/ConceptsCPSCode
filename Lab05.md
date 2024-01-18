@@ -1,3 +1,4 @@
+```c
 #include "lab05.h"
 
 #include <xc.h>
@@ -210,3 +211,4 @@ void __attribute__((__interrupt__, __shadow__, __auto_psv__)) _T2Interrupt(void)
     global_counter_tmr2++; // Increment a global counter
 }
 
+```
