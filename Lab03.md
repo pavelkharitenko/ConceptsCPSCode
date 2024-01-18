@@ -56,8 +56,6 @@ void dac_initialize()
     TRISBbits.TRISB11 = 0; // similar
     TRISBbits.TRISB13 = 0; // similar
     
-    TRISDbits.TRISD8 = 1;  // similar
-    Nop();
     TRISDbits.TRISD8 = 0;  // similar
     
     // set default state: CS=??, SCK=??, SDI=??, LDAC=??
