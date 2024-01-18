@@ -72,10 +72,16 @@ void initialize_servos(){
 }
 
 void set_duty_cycle(uint8_t servo_number, double duty_cycle){
+
+    // FCY = 12,8e6/64 = 200 000, reached in 1s. For duty_cycle of x ms:
+    //
     double duty_period = duty_cycle * FCY * 1/64000;
+
     if (servo_number == 0){ // x-axis
         OC8RS = (uint16_t)(duty_period);
-    } else if (servo_number == 1){ //y-axis
+    } 
+    else if (servo_number == 1){ //y-axis
+
         OC7RS = (uint16_t)(duty_period);
     }
 }
