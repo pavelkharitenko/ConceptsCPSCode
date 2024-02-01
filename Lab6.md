@@ -18,21 +18,21 @@
 /*
  * Parameters
  */
+
+// reference circle
 #define pi 3.1415926
 #define radius 100
 #define center_x 400
 #define center_y 370
-#define circle_period 5 // number of seconds to do a circle
-#define omega 2*pi/circle_period // rad/s (v = 2*pi*r/T), w = v/r)
+#define circle_period 200.0 // number of seconds to do a circle
+
+double omega =  2*pi/circle_period; // rad/s (v = 2*pi*r/T), w = v/r)
 
 
-
-#define k_px 0.001
-//#define k_dx 0.055
-#define k_dx 0.02
-
-#define k_py 0.001
-#define k_dy 0.02
+#define Kp_x 1.0
+#define Kd_x 1.0
+#define Kp_y 1.0
+#define Kd_y 1.0
 
 /*
  * Common Definitions
@@ -46,46 +46,35 @@
  * Global Variables
  */
 // butterworth parameters
-double butter_a = -0.67959929;
-double butter_b1 = 0.16020035;
-double butter_b2 = 0.16020035;
+double a = -0.67959929;
+double b1 = 0.16020035;
+double b2 = 0.16020035;
+
+// current X Y variables
+volatile double currXY[] = {0.0, 0.0};
+
+// old X Y variables
+volatile double minus1XY[] = {0.0, 0.0};
+
+// current smoothed X Y variables
+volatile double smoothedXY[] = {0.0, 0.0};
+
+// old error X Y
+volatile double minus1errorXY[] = {0.0,0.0};
+
+// global time in ms
+volatile double global_ms = 0.0;
 
 uint16_t global_counter_tmr3;
-bool workload_status = false;
-uint16_t missed_deadlines = 0;
-
-volatile uint16_t setptX = center_x + radius;
-volatile uint16_t setptY = center_y;
 
 volatile uint16_t currentDim = 0;
 
-volatile int16_t error_prevX;
-volatile int16_t error_prevY;
-
-volatile uint16_t raw_prevX;
-volatile uint16_t output_prevX;
-volatile uint16_t raw_X;
-volatile uint16_t filt_X;
-
-volatile uint16_t raw_Y;
-volatile uint16_t filt_Y;
-volatile uint16_t raw_prevY;
-volatile uint16_t output_prevY;
         
 /*
  * Timer Code
  */
 void initialize_timer(){
 
-    // Setup Timer 2 - 50Hz (works with servos)
-    CLEARBIT(T2CONbits.TON);
-    CLEARBIT(T2CONbits.TCS);
-    CLEARBIT(T2CONbits.TGATE);
-    TMR2 = 0; 
-    T2CONbits.TCKPS = 0b10; // select 1:64 prescaler
-    CLEARBIT(IFS0bits.T2IF);
-    CLEARBIT(IEC0bits.T2IE);   
-    PR2 = 4000; // set timer period: 1ms is 200 tps => 20ms is 4000 (because 12.8MHz / 64 = 200 000 tps is 1s)
     
     // Setup Timer 3 - 100Hz
     CLEARBIT(T3CONbits.TON);
@@ -98,17 +87,12 @@ void initialize_timer(){
     PR3 = 2000; // set timer period: 1ms is 200 tps => 20ms is 4000 (because 12.8MHz / 64 = 200 000 tps is 1s)
 
     // set timers priority
-    IPC0bits.T2IP = 0x01;
     IPC2bits.T3IP = 0x01;
     
-    
     // enable timers IR
-    IEC0bits.T2IE = 1;
     IEC0bits.T3IE = 1;
 
-
     // enable timers    
-    SETBIT(T2CONbits.TON);
     SETBIT(T3CONbits.TON); 
     
 }
@@ -141,7 +125,6 @@ void set_duty_cycle(uint8_t servo_number, double duty_cycle){
         duty_cycle = 0.9;
     }
     duty_cycle = 20 - duty_cycle;
-    //lcd_printf("duty x: %f ", duty_control_x)
     double duty_period = duty_cycle * FCY * 1/64000;
     if (servo_number == 0){ // x-axis
         OC8RS = (uint16_t)(duty_period);
@@ -211,53 +194,56 @@ void change_dimension(){ // 0: x, 1: y
     currentDim ^= 1;
 }
 
-uint16_t read_position(){
-    // x-pin
-     // Set ADC to Sample AN15 pin
+double read_position(){
+    // Set ADC to Sample AN15 pin
     SETBIT(AD1CON1bits.SAMP); // Start to sample
     while(!AD1CON1bits.DONE); // Wait for conversion to finish
     CLEARBIT(AD1CON1bits.DONE); // MUST HAVE! Clear conversion done bit
-    return ADC1BUF0;
+    uint16_t x = ADC1BUF0;
+    double x2 = (double)x;
+    return x2;
 }
-
-/*uint16_t read_position_y(){
-    // y-pin
-     // Set ADC to Sample AN9 pin
-    SETBIT(AD1CON1bits.SAMP); // Start to sample
-    while(!AD1CON1bits.DONE); // Wait for conversion to finish
-    CLEARBIT(AD1CON1bits.DONE); // MUST HAVE! Clear conversion done bit
-    return ADC1BUF0;
-}*/ // these are the same... remove one only change dim is necessary to set output
-
 
 /*
  * PD Controller
  */
-void pd_controlx(uint16_t signal){
-    int16_t error = center_x - signal; // x ranges from 70-725 (long side)
-    int16_t d_error = (error - error_prevX);
-    double duty_error = k_px*(error) + k_dx*(d_error);
+void pd_control_x(){
+    double x_ref = center_x + radius * cos(omega*global_ms);
+    // compute X error
+    double error_X = x_ref - smoothedXY[0]; // x ranges from 70-725 (long side)
+    double d_error_X = (error_X - minus1errorXY[0]);
+    double pd_error_x = Kp_x * (error_X) + Kd_y * (d_error_X);
+    
     // map to duty cycle
-    double x_control = 1.75 + duty_error;
-    error_prevX = error;
-    set_duty_cycle(0, x_control);
+    double u_x = 1.75 + pd_error_x;
+    minus1errorXY[0] = error_X;
+    set_duty_cycle(0, u_x);
 }
 
-void pd_controly(uint16_t signal){
-    int16_t error = center_y - signal; // y ranges from 90-630 (short side)
-    int16_t d_error = (error - error_prevY);
-    double duty_error = k_py*error + k_dy*d_error;   
+void pd_control_y(){
+    double y_ref  = center_y + radius * sin(omega*global_ms);
+    // compute Y error
+    double error_Y = y_ref - smoothedXY[1]; // y ranges from 90-630 (short side)
+    double d_error_Y = (error_Y - minus1errorXY[1]);
+    double pd_error_y = Kp_y * error_Y + Kd_y * d_error_Y;   
+    
     // map to duty cycle
-    double y_control = 1.5 + duty_error;
-    error_prevY = error;
-    set_duty_cycle(1, y_control);
+    double u_y = 1.5 + pd_error_y;
+    minus1errorXY[1] = error_Y;
+    set_duty_cycle(1, u_y);
 }
 
 /*
  * Butterworth Filter N=1, Cutoff 3 Hz, sampling @ 50 Hz
  */
-uint16_t butter_filter(uint16_t raw, uint16_t raw_prev, uint16_t output_prev){
-    return (uint16_t)(butter_b1*raw + butter_b2*raw_prev - butter_a*output_prev);
+void apply_filter(){
+    // equation is: curr_smoothed = b1*current + b2*minus1 + a*smoothed_prev
+    
+    smoothedXY[0] = b1*currXY[0] + b2*minus1XY[0] + a*smoothedXY[0];
+    smoothedXY[1] = b1*currXY[0] + b2*minus1XY[0] + a*smoothedXY[0];
+    
+    minus1XY[0] = currXY[0];
+    minus1XY[1] = currXY[1];
 }
 
 
@@ -267,6 +253,7 @@ uint16_t butter_filter(uint16_t raw, uint16_t raw_prev, uint16_t output_prev){
 void main_loop()
 {    
     // print assignment information
+    lcd_clear();
     lcd_printf("Lab06: Amazing Ball");
     lcd_locate(0, 1);
     lcd_printf("Group: Lab 3 Group 2");
@@ -274,7 +261,6 @@ void main_loop()
     
     // initialize touchscreen
     initialize_touchscreen();
-    change_dimension(0);
     __delay_ms(10);
         
     // initialize servos
@@ -283,29 +269,16 @@ void main_loop()
     initialize_timer();
     
     while(TRUE) {
-        // print missed deadlines every 5Hz (0.2s)
-        if (global_counter_tmr3 == 20){
-            lcd_locate(0,3);    
-            lcd_printf("Deadlines Missed: %u ", missed_deadlines);
-        }
-        // alternate filter and control every 20ms (50Hz)
-        if (global_counter_tmr3 % 2 == 0){
-            //raw_X = read_position();
-            filt_X = butter_filter(raw_X, raw_prevX, output_prevX);
-            raw_prevX = raw_X;
-            output_prevX = filt_X;
-            filt_Y = butter_filter(raw_Y, raw_prevY, output_prevY);
-            raw_prevY = raw_Y;
-            output_prevY = filt_Y;
-            pd_controlx(filt_X);
-            pd_controly(filt_Y);
-            //lcd_locate(0,4); 
-            //lcd_printf("duty x: %f ", filt_x)
-            workload_status = true;
-            // advance setpoint, aim for one cycle in 5s. 
-            setptX = (uint16_t)(center_x + radius * cos(omega*global_counter_tmr3));
-            setptY = (uint16_t)(center_y + radius * sin(omega*global_counter_tmr3));
-        }
+        
+        lcd_locate(0,4);
+        lcd_printf("Ref X:   %f  ", (double) (center_x + radius *cos(omega*global_ms)));
+        lcd_locate(0,5);
+        lcd_printf("Ref Y:   %f  ", (double)(center_y + radius * sin(omega*global_ms)));
+
+        lcd_locate(0,6);
+        lcd_printf("Time in ms:   %f   ", global_ms);
+        //lcd_locate(0,7);
+        //lcd_printf("Ref Y:   %d  ", sin(omega*global_ms));  
     }
 }
 
@@ -313,24 +286,30 @@ void main_loop()
 void __attribute__((__interrupt__, __shadow__, __auto_psv__)) _T3Interrupt(void)
 { 
     IFS0bits.T3IF = 0; // Clear the interrupt flag 
-
     
-    
-    read_position();    // read current variable
+    global_ms += 10.0;
+    currXY[global_counter_tmr3 % 2] = read_position();    // read current variable
     change_dimension(); // change variable
     
-
     global_counter_tmr3++; // Increment a global counter
-    // check workload
-    if (workload_status == false){
-        missed_deadlines++;
+    
+    // run control every time both positions were read
+    if(global_counter_tmr3 % 2 == 0){
+        
+        // apply filter
+        apply_filter();
+        
+        // track error
+        pd_control_x();
+        pd_control_y();
     }
-    if (global_counter_tmr3 == 500){
+    
+    
+    
+    if(global_counter_tmr3 == 2000){
         global_counter_tmr3 = 0;
     }
+    
 
 }
-
-
-
 ```
