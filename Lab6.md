@@ -19,20 +19,30 @@
  * Parameters
  */
 
+
+
+// actual screen params // usual values
+#define max_x 730 // 725
+#define min_x 70 // 70
+#define max_y 625 // 630
+#define min_y 115 // 90
+
 // reference circle
 #define pi 3.1415926
-#define radius 100
-#define center_x 400
-#define center_y 370
-#define circle_period 200.0 // number of seconds to do a circle
+#define radius 200
+#define center_x ((max_x-min_x)/2.0)
+#define center_y (max_y-min_y)/2.0
+#define circle_period_in_10ms 1000 // *10ms = 1 round around in ms
 
-double omega =  2*pi/circle_period; // rad/s (v = 2*pi*r/T), w = v/r)
+double omega =  2.0*pi/circle_period_in_10ms; // rad/s (v = 2*pi*r/T), w = v/r)
 
 
-#define Kp_x 1.0
-#define Kd_x 1.0
-#define Kp_y 1.0
-#define Kd_y 1.0
+//#define Kp_x .0000001
+//#define Kp_x 0.002
+#define Kp_x 0.0015
+#define Kd_x 0.003
+#define Kp_y 0.003
+#define Kd_y 0.0
 
 /*
  * Common Definitions
@@ -51,13 +61,13 @@ double b1 = 0.16020035;
 double b2 = 0.16020035;
 
 // current X Y variables
-volatile double currXY[] = {0.0, 0.0};
+volatile double currXY[] = {center_x, center_y};
 
 // old X Y variables
-volatile double minus1XY[] = {0.0, 0.0};
+volatile double minus1XY[] = {center_x, center_y};
 
 // current smoothed X Y variables
-volatile double smoothedXY[] = {0.0, 0.0};
+volatile double smoothedXY[] = {0, 0};
 
 // old error X Y
 volatile double minus1errorXY[] = {0.0,0.0};
@@ -67,14 +77,22 @@ volatile double global_ms = 0.0;
 
 uint16_t global_counter_tmr3;
 
-volatile uint16_t currentDim = 0;
+volatile uint16_t dim = 0;
 
         
 /*
  * Timer Code
  */
 void initialize_timer(){
-
+    // Setup Timer 2
+    CLEARBIT(T2CONbits.TON);
+    CLEARBIT(T2CONbits.TCS);
+    CLEARBIT(T2CONbits.TGATE);
+    TMR2 = 0; 
+    T2CONbits.TCKPS = 0b10; // select 1:64 prescaler
+    CLEARBIT(IFS0bits.T2IF);
+    CLEARBIT(IEC0bits.T2IE);
+    PR2 = 4000; // set timer period: 1ms is 200 tps => 20ms is 4000 (because 12.8MHz / 64 = 200 000 tps is 1s)
     
     // Setup Timer 3 - 100Hz
     CLEARBIT(T3CONbits.TON);
@@ -91,44 +109,58 @@ void initialize_timer(){
     
     // enable timers IR
     IEC0bits.T3IE = 1;
+    //IEC0bits.T2IE = 1;
 
     // enable timers    
-    SETBIT(T3CONbits.TON); 
+    SETBIT(T3CONbits.TON);
+    SETBIT(T2CONbits.TON); 
     
 }
 
 /*
  * Servo Code
  */
-void initialize_servos(uint8_t servo_number){
-    if (servo_number == 0){ // x-servo --> OC8
+void initialize_servos(){
+    // x-servo --> OC8
         // Setup OC8
         CLEARBIT(TRISDbits.TRISD7);
-        OC8R = 3650; // set initial duty cycle to 1.75ms (based on TMR2 period))
-        OC8RS = 3650; // load OCRS: next PWM duty cycle
-        OC8CON = 0x0006; // set OC8: PWM, no fault check, TMR 2
-    }
-    else if (servo_number == 1){ // y-servo --> OC7
+        OC8R = 3700; // set initial duty cycle to 1.75ms (based on TMR2 period))
+        OC8RS = 3700; // load OCRS: next PWM duty cycle
+        OC8CON = 0x0006; // set OC8: PWM, no fault check, TMR 2     
+    
+    // y-servo --> OC7
         // Setup OC7
         CLEARBIT(TRISDbits.TRISD6);
         OC7R = 3700; // set initial duty cycle to 20-1.5ms (based on TMR2 period))
         OC7RS = 3700;
         OC7CON = 0x0006;
-    }
+    
 }
 
 void set_duty_cycle(uint8_t servo_number, double duty_cycle){
+    
+    // clip 
     if (duty_cycle >= 2.1){
         duty_cycle = 2.1;
     }
     if (duty_cycle <= 0.9){
         duty_cycle = 0.9;
     }
-    duty_cycle = 20 - duty_cycle;
+    
+    
+    duty_cycle = 20.0 - duty_cycle;
+    
+    //double duty_period = duty_cycle * FCY * 1/64000;
+    
     double duty_period = duty_cycle * FCY * 1/64000;
+    
+    
+    
+    
     if (servo_number == 0){ // x-axis
         OC8RS = (uint16_t)(duty_period);
-    } if (servo_number == 1){ //y-axis
+    } 
+    if (servo_number == 1){ //y-axis
         OC7RS = (uint16_t)(duty_period);
     }
 }
@@ -172,9 +204,9 @@ void initialize_touchscreen(){
     SETBIT(AD1CON1bits.ADON);
 }
 
-void change_dimension(){ // 0: x, 1: y
+void change_dimension_ts(uint16_t currentDim){ // 0: x, 1: y
 
-    if (currentDim == 0){
+    if (TRUE || currentDim == 0){
         // set up the I/O pins E1, E2, E3 so that the touchscreen's x-coordinate pin connects to the ADC
         CLEARBIT(PORTEbits.RE1);
         Nop();
@@ -191,7 +223,8 @@ void change_dimension(){ // 0: x, 1: y
         CLEARBIT(PORTEbits.RE3);
         AD1CHS0bits.CH0SA = 0x009;
     }
-    currentDim ^= 1;
+    
+    
 }
 
 double read_position(){
@@ -204,33 +237,63 @@ double read_position(){
     return x2;
 }
 
+double clip_u(double u){
+    if(u > 1.7){
+        u = 1.7;
+    }
+    if(u < 1.44){
+        u = 1.44;
+    }
+    return u;
+}
+
 /*
  * PD Controller
  */
 void pd_control_x(){
-    double x_ref = center_x + radius * cos(omega*global_ms);
+    double x_ref = center_x + radius * cos(omega*global_counter_tmr3) + 100;
+    lcd_locate(0,4);
+    lcd_printf("Ref X: %u ", (uint16_t) x_ref);
+    
+    
+    //double x_ref = center_x;
+    
     // compute X error
-    double error_X = x_ref - smoothedXY[0]; // x ranges from 70-725 (long side)
+    double error_X = x_ref - currXY[0]; // x ranges from 70-725 (long side)
+    
+    
+    
     double d_error_X = (error_X - minus1errorXY[0]);
-    double pd_error_x = Kp_x * (error_X) + Kd_y * (d_error_X);
+    
+    double pd_error_x = Kp_x * error_X + Kd_x * d_error_X;
     
     // map to duty cycle
-    double u_x = 1.75 + pd_error_x;
+    double u_x = (pd_error_x + 1.50);
     minus1errorXY[0] = error_X;
+    lcd_locate(0,7);
+    u_x = clip_u(u_x);
+    lcd_printf("error_x : %f    ", u_x);  
     set_duty_cycle(0, u_x);
+    
+    
 }
+
+
+
+
 
 void pd_control_y(){
     double y_ref  = center_y + radius * sin(omega*global_ms);
+    
     // compute Y error
     double error_Y = y_ref - smoothedXY[1]; // y ranges from 90-630 (short side)
     double d_error_Y = (error_Y - minus1errorXY[1]);
     double pd_error_y = Kp_y * error_Y + Kd_y * d_error_Y;   
     
     // map to duty cycle
-    double u_y = 1.5 + pd_error_y;
+    double u_y = pd_error_y;
     minus1errorXY[1] = error_Y;
-    set_duty_cycle(1, u_y);
+    set_duty_cycle(1, 0.9);
 }
 
 /*
@@ -240,7 +303,7 @@ void apply_filter(){
     // equation is: curr_smoothed = b1*current + b2*minus1 + a*smoothed_prev
     
     smoothedXY[0] = b1*currXY[0] + b2*minus1XY[0] + a*smoothedXY[0];
-    smoothedXY[1] = b1*currXY[0] + b2*minus1XY[0] + a*smoothedXY[0];
+    smoothedXY[1] = b1*currXY[1] + b2*minus1XY[1] + a*smoothedXY[1];
     
     minus1XY[0] = currXY[0];
     minus1XY[1] = currXY[1];
@@ -261,55 +324,83 @@ void main_loop()
     
     // initialize touchscreen
     initialize_touchscreen();
-    __delay_ms(10);
+    
+    change_dimension_ts(0);
+    __delay_ms(20);
+    currXY[dim] = read_position();    
+    
+    
         
     // initialize servos
-    initialize_servos(0);
-    initialize_servos(1);    
+    initialize_servos();   
+    // timer last
     initialize_timer();
     
     while(TRUE) {
         
-        lcd_locate(0,4);
-        lcd_printf("Ref X:   %f  ", (double) (center_x + radius *cos(omega*global_ms)));
-        lcd_locate(0,5);
-        lcd_printf("Ref Y:   %f  ", (double)(center_y + radius * sin(omega*global_ms)));
+        //lcd_locate(0,4);
+        //lcd_printf("Ref X: %u ", (uint16_t) (center_x + radius * cos(omega*global_counter_tmr3)));
+        //lcd_printf("Ref X: %u ", (uint16_t) center_x);
 
-        lcd_locate(0,6);
-        lcd_printf("Time in ms:   %f   ", global_ms);
-        //lcd_locate(0,7);
-        //lcd_printf("Ref Y:   %d  ", sin(omega*global_ms));  
+        //lcd_locate(0,5);
+        //lcd_printf("Ref Y: %u ", (uint16_t)(center_y + radius * sin(omega*global_counter_tmr3)));
+        
+        //lcd_locate(0,6);
+        //lcd_printf("Gl. Ctr: %u    ", global_counter_tmr3);  
+        
+        //lcd_locate(0,3);
+        //lcd_printf("smoothed x: %f    ", smoothedXY[0]);
+
+        lcd_locate(0,3);
+        lcd_printf("Meas. x: %f    ", currXY[0]);
+       
+        
+         
+    
+          
+        
+    
+        dim = global_counter_tmr3 % 2;
+        currXY[dim] = read_position();    // read current variable
+        
+        change_dimension_ts(dim); // change to next touchscreen reading axis
+         
+        
+          
+    
+        // run control every time both positions were read
+        if(dim == 1){
+
+            // apply filter
+            //apply_filter();
+
+            // track error
+            pd_control_x();
+            pd_control_y();
+        }
+        
+        
+        
     }
 }
 
 // timer3 interrupt - 100 Hz (check deadline, advance time, read either X or Y)
 void __attribute__((__interrupt__, __shadow__, __auto_psv__)) _T3Interrupt(void)
 { 
+    // runs every 10ms
     IFS0bits.T3IF = 0; // Clear the interrupt flag 
+
     
-    global_ms += 10.0;
-    currXY[global_counter_tmr3 % 2] = read_position();    // read current variable
-    change_dimension(); // change variable
     
+    // do time updates updates
     global_counter_tmr3++; // Increment a global counter
     
-    // run control every time both positions were read
-    if(global_counter_tmr3 % 2 == 0){
-        
-        // apply filter
-        apply_filter();
-        
-        // track error
-        pd_control_x();
-        pd_control_y();
-    }
-    
-    
-    
-    if(global_counter_tmr3 == 2000){
+    // reset after T round around 
+    if(global_counter_tmr3 == circle_period_in_10ms){
         global_counter_tmr3 = 0;
     }
     
 
 }
+
 ```
