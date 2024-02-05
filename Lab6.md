@@ -1,5 +1,4 @@
 ```c
-
 #include "lab06.h"
 
 #include <xc.h>
@@ -39,9 +38,9 @@ double omega =  2.0*pi/circle_period_in_10ms; // rad/s (v = 2*pi*r/T), w = v/r)
 
 //#define Kp_x .0000001
 //#define Kp_x 0.002
-#define Kp_x 0.0015
-#define Kd_x 0.003
-#define Kp_y 0.003
+#define Kp_x 0.0005
+#define Kd_x 0.001
+#define Kp_y 0.0005
 #define Kd_y 0.0
 
 /*
@@ -206,7 +205,7 @@ void initialize_touchscreen(){
 
 void change_dimension_ts(uint16_t currentDim){ // 0: x, 1: y
 
-    if (TRUE || currentDim == 0){
+    if (currentDim == 0){
         // set up the I/O pins E1, E2, E3 so that the touchscreen's x-coordinate pin connects to the ADC
         CLEARBIT(PORTEbits.RE1);
         Nop();
@@ -221,28 +220,39 @@ void change_dimension_ts(uint16_t currentDim){ // 0: x, 1: y
         CLEARBIT(PORTEbits.RE2);
         Nop();
         CLEARBIT(PORTEbits.RE3);
-        AD1CHS0bits.CH0SA = 0x009;
+        //AD1CHS0bits.CH0SA = 0x009;
     }
+    
+    __delay_ms(10);
     
     
 }
 
-double read_position(){
+double read_position(uint16_t dim){
+    if (dim == 0){
+        AD1CHS0bits.CH0SA = 0x00F;
+    } else{
+        AD1CHS0bits.CH0SA = 0x009;
+    }
+    
     // Set ADC to Sample AN15 pin
     SETBIT(AD1CON1bits.SAMP); // Start to sample
     while(!AD1CON1bits.DONE); // Wait for conversion to finish
     CLEARBIT(AD1CON1bits.DONE); // MUST HAVE! Clear conversion done bit
+    
+
     uint16_t x = ADC1BUF0;
     double x2 = (double)x;
     return x2;
+    
 }
 
 double clip_u(double u){
     if(u > 1.7){
         u = 1.7;
     }
-    if(u < 1.44){
-        u = 1.44;
+    if(u < 1.3){
+        u = 1.3;
     }
     return u;
 }
@@ -283,17 +293,20 @@ void pd_control_x(){
 
 
 void pd_control_y(){
-    double y_ref  = center_y + radius * sin(omega*global_ms);
+    double y_ref  = center_y + radius * sin(omega*global_counter_tmr3);
     
     // compute Y error
-    double error_Y = y_ref - smoothedXY[1]; // y ranges from 90-630 (short side)
+    double error_Y = y_ref - currXY[1]; // y ranges from 90-630 (short side)
     double d_error_Y = (error_Y - minus1errorXY[1]);
     double pd_error_y = Kp_y * error_Y + Kd_y * d_error_Y;   
     
     // map to duty cycle
-    double u_y = pd_error_y;
+    double u_y = (1.5 + pd_error_y);
     minus1errorXY[1] = error_Y;
-    set_duty_cycle(1, 0.9);
+    lcd_locate(0,6);
+    u_y = clip_u(u_y);
+    lcd_printf("ERROR Y: %f    ", u_y);
+    set_duty_cycle(1, u_y);
 }
 
 /*
@@ -327,7 +340,7 @@ void main_loop()
     
     change_dimension_ts(0);
     __delay_ms(20);
-    currXY[dim] = read_position();    
+    currXY[0] = read_position(0);    
     
     
         
@@ -357,13 +370,17 @@ void main_loop()
         
          
     
-          
+        
         
     
         dim = global_counter_tmr3 % 2;
-        currXY[dim] = read_position();    // read current variable
-        
         change_dimension_ts(dim); // change to next touchscreen reading axis
+        if(dim == 0)
+            currXY[0] = read_position(dim);    // read current variable
+        if(dim == 1)
+            currXY[1] = read_position(dim);
+        
+        
          
         
           
@@ -402,5 +419,6 @@ void __attribute__((__interrupt__, __shadow__, __auto_psv__)) _T3Interrupt(void)
     
 
 }
+
 
 ```
