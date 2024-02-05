@@ -60,13 +60,13 @@ double b1 = 0.16020035;
 double b2 = 0.16020035;
 
 // current X Y variables
-volatile double currXY[] = {center_x, center_y};
+volatile double currXY[] = {0, 0};
 
 // old X Y variables
-volatile double minus1XY[] = {center_x, center_y};
+volatile double minus1XY[] = {0, 0};
 
 // current smoothed X Y variables
-volatile double smoothedXY[] = {0, 0};
+volatile double smoothedXY[] = {center_x, center_y};
 
 // old error X Y
 volatile double minus1errorXY[] = {0.0,0.0};
@@ -78,6 +78,8 @@ uint16_t global_counter_tmr3;
 
 volatile uint16_t dim = 0;
 
+volatile uint16_t nextDeadline = 2;         
+volatile uint16_t n_deadlines_missed = 0;
         
 /*
  * Timer Code
@@ -294,13 +296,8 @@ void pd_control_x(){
     u_x = clip_u_x(u_x);
     lcd_printf("error_x : %f    ", u_x);  
     set_duty_cycle(0, u_x);
-    
-    
+
 }
-
-
-
-
 
 void pd_control_y(){
     double y_ref  = center_y + radius * sin(omega*global_counter_tmr3);
@@ -358,6 +355,7 @@ void main_loop()
     initialize_servos();   
     // timer last
     initialize_timer();
+    nextDeadline = (global_counter_tmr3 + 5)%  circle_period_in_10ms;
     
     while(TRUE) {
         
@@ -374,15 +372,11 @@ void main_loop()
         //lcd_locate(0,3);
         //lcd_printf("smoothed x: %f    ", smoothedXY[0]);
 
+        //lcd_locate(0,3);
+        //lcd_printf("Meas. x: %f    ", currXY[0]);
         lcd_locate(0,3);
-        lcd_printf("Meas. x: %f    ", currXY[0]);
-       
-        
-         
-    
-        
-        
-    
+        lcd_printf("Deadl. missed: %u    ", n_deadlines_missed);
+
         dim = global_counter_tmr3 % 2;
         change_dimension_ts(dim); // change to next touchscreen reading axis
         if(dim == 0)
@@ -390,20 +384,23 @@ void main_loop()
         if(dim == 1)
             currXY[1] = read_position(dim);
         
+        if (global_counter_tmr3 > nextDeadline){
+                n_deadlines_missed++;
+        }
         
-         
-        
-          
-    
         // run control every time both positions were read
         if(dim == 1){
-
+            
+            nextDeadline = (global_counter_tmr3 + 5)% circle_period_in_10ms;
+            
             // apply filter
-            //apply_filter();
+            apply_filter();
 
             // track error
             pd_control_x();
             pd_control_y();
+            
+            
         }
         
         
