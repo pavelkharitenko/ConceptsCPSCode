@@ -250,8 +250,8 @@ double read_position(uint16_t dim){
 }
 
 double clip_u_x(double u){
-    if(u > 1.7){
-        u = 1.7;
+    if(u > 1.9){
+        u = 1.9;
     }
     if(u < 1.4){
         u = 1.4;
@@ -290,11 +290,11 @@ void pd_control_x(){
     double pd_error_x = Kp_x * error_X + Kd_x * d_error_X;
     
     // map to duty cycle
-    double u_x = (pd_error_x + 1.60);
+    double u_x = (pd_error_x + 1.78);
     minus1errorXY[0] = error_X;
     lcd_locate(0,7);
     u_x = clip_u_x(u_x);
-    lcd_printf("error_x : %f    ", u_x);  
+    lcd_printf("error x : %f    ", u_x);  
     set_duty_cycle(0, u_x);
 
 }
@@ -308,11 +308,11 @@ void pd_control_y(){
     double pd_error_y = Kp_y * error_Y + Kd_y * d_error_Y;   
     
     // map to duty cycle
-    double u_y = (1.5 + pd_error_y);
+    double u_y = (1.6 + pd_error_y);
     minus1errorXY[1] = error_Y;
     lcd_locate(0,6);
     u_y = clip_u_y(u_y);
-    lcd_printf("ERROR Y: %f    ", u_y);
+    lcd_printf("error y: %f    ", u_y);
     set_duty_cycle(1, u_y);
 }
 
@@ -355,7 +355,7 @@ void main_loop()
     initialize_servos();   
     // timer last
     initialize_timer();
-    nextDeadline = (global_counter_tmr3 + 5)%  circle_period_in_10ms;
+    nextDeadline = (global_counter_tmr3 + 10)%  circle_period_in_10ms;
     
     while(TRUE) {
         
@@ -391,7 +391,7 @@ void main_loop()
         // run control every time both positions were read
         if(dim == 1){
             
-            nextDeadline = (global_counter_tmr3 + 5)% circle_period_in_10ms;
+            nextDeadline = (global_counter_tmr3 + 10)% circle_period_in_10ms;
             
             // apply filter
             apply_filter();
@@ -426,6 +426,7 @@ void __attribute__((__interrupt__, __shadow__, __auto_psv__)) _T3Interrupt(void)
     
 
 }
+
 
 
 ```
