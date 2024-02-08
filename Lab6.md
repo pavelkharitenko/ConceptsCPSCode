@@ -28,7 +28,7 @@
 
 // reference circle
 #define pi 3.1415926
-#define radius 150
+#define radius 125
 #define center_x ((max_x-min_x)/2.0)
 #define center_y (max_y-min_y)/2.0
 #define circle_period_in_10ms 1000 // *10ms = 1 round around in ms
@@ -38,8 +38,8 @@ double omega =  2.0*pi/circle_period_in_10ms; // rad/s (v = 2*pi*r/T), w = v/r)
 
 //#define Kp_x .0000001
 //#define Kp_x 0.002
-#define Kp_x 0.00045
-#define Kd_x 0.0018
+#define Kp_x 0.00035
+#define Kd_x 0.0025
 #define Kp_y 0.0006
 #define Kd_y 0.002
 
@@ -253,8 +253,8 @@ double clip_u_x(double u){
     if(u > 1.9){
         u = 1.9;
     }
-    if(u < 1.4){
-        u = 1.4;
+    if(u < 1.1){
+        u = 1.1;
     }
     return u;
 }
@@ -290,7 +290,7 @@ void pd_control_x(){
     double pd_error_x = Kp_x * error_X + Kd_x * d_error_X;
     
     // map to duty cycle
-    double u_x = (pd_error_x + 1.78);
+    double u_x = (pd_error_x + 1.75);
     minus1errorXY[0] = error_X;
     lcd_locate(0,7);
     u_x = clip_u_x(u_x);
@@ -308,7 +308,7 @@ void pd_control_y(){
     double pd_error_y = Kp_y * error_Y + Kd_y * d_error_Y;   
     
     // map to duty cycle
-    double u_y = (1.6 + pd_error_y);
+    double u_y = (1.55 + pd_error_y);
     minus1errorXY[1] = error_Y;
     lcd_locate(0,6);
     u_y = clip_u_y(u_y);
@@ -426,6 +426,8 @@ void __attribute__((__interrupt__, __shadow__, __auto_psv__)) _T3Interrupt(void)
     
 
 }
+
+
 
 
 
